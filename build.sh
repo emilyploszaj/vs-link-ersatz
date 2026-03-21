@@ -1,0 +1,1 @@
+ldc2 -mtriple=x86_64-windows-msvc -linker=lld-link -L/libpath:libs -L/force:unresolved -static -shared -ofvslinkcore.dll source/app.d

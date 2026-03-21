@@ -1,0 +1,10 @@
+{
+	"authors": [
+		"Emi"
+	],
+	"copyright": "Copyright © 2026, Emi",
+	"description": "A minimal D application.",
+	"license": "proprietary",
+	"targetType": "dynamicLibrary",
+	"name": "vslinkcore"
+}
