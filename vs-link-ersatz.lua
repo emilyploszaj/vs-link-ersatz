@@ -235,10 +235,6 @@ function decryptMon(range, seed, offset, length)
 	return ret
 end
 
-function debug()
-	statusPartyMember(1, "")
-end
-
 function statusPartyMember(member, status)
 	local party = memory.readdword(0x02101D2C) + 0xD094
 	local partyData = memory.readbyterange(party + 236 * member, 236)
@@ -307,5 +303,3 @@ end
 
 gui.register(frame)
 print("Successfully loaded Vs. Link Ersatz, by Emi")
-
-debug()
