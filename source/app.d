@@ -12,7 +12,7 @@ import std.json;
 import std.socket;
 import std.string;
 
-enum string VERSION = "0.1.0";
+enum string VERSION = "0.1.1";
 
 __gshared status = "idle";
 __gshared Http req;
@@ -33,7 +33,7 @@ void httpRun() {
 		char[1024] buffer;
 
 		try {
-			while (true) {
+			while (client.isAlive()) {
 				auto received = client.receive(buffer);
 
 				if (received > 0) {
@@ -44,20 +44,10 @@ void httpRun() {
 						if (http.method == "GET" && http.path == "/ping") {
 							client.sendResponse(`{"name": "vs-link-ersatz", "version": "` ~ VERSION ~ `"}`);
 							break;
+						} else if (http.method == "POST" && http.path == "/status") {
+							sendToLua(client, http);
 						} else if (http.method == "GET" && http.path == "/sync") {
-							req = http;
-							status = "requested";
-							for (int waits = 0; waits < 100; waits++) {
-								Thread.sleep(dur!"msecs"(30));
-								if (status == "responded") {
-									Http response = res;
-									client.sendResponse(response.content);
-									status = "idle";
-									break;
-								}
-							}
-							status = "idle";
-							client.sendResponse(message);
+							sendToLua(client, http);
 							break;
 						} else {
 							client.sendResponse(`{"error": "Unknown Vs. Link Ersatz command"}`);
@@ -69,15 +59,33 @@ void httpRun() {
 			}
 		} catch (Exception e) {
 		}
-
-		client.shutdown(SocketShutdown.BOTH);
-		client.close();
+		try {
+			client.shutdown(SocketShutdown.BOTH);
+			client.close();
+		} catch (Exception e) {
+		}
 	}
+}
+
+void sendToLua(Socket client, Http http) {
+	req = http;
+	status = "requested";
+	for (int waits = 0; waits < 200; waits++) {
+		Thread.sleep(dur!"msecs"(30));
+		if (status == "responded") {
+			Http response = res;
+			client.sendResponse(response.content);
+			status = "idle";
+			return;
+		}
+	}
+	status = "idle";
+	client.sendResponse(`{"error": "DeSmuME took too long to respond!"}`);
 }
 
 void sendResponse(Socket client, string message) {
 	string response = 
-		"HTTP/1.1 200 OK\r\n" ~
+		"HTTP/1.0 200 OK\r\n" ~
 		"Access-Control-Allow-Origin: *\r\n" ~
 		"Content-Type: text/plain\r\n" ~
 		"Content-Length: " ~ message.length.to!string ~ "\r\n" ~
@@ -164,20 +172,38 @@ extern(C) int vs_pollServer(lua_State L) {
 	string s = status;
 	addTableField(L, "status", s);
 	if (s == "requested") {
+		addTableField(L, "method", req.method);
+		addTableField(L, "path", req.path);
 		addTableField(L, "request", req.content);
 	}
 
 	return 1;
 }
 
+
+extern(C) int vs_error(lua_State L) {
+	size_t* size;
+	string reason = cast(string) luaL_checklstring(L, 1, size).fromStringz();
+	if (status == "requested") {
+		res.content = `{"error": "` ~ reason ~ `"}`;
+		status = "responded";
+	}
+	return 0;
+}
+
 extern(C) int vs_respond(lua_State L) {
 	int args = lua_gettop(L);
-	int[] pc = getIntArray(L, 2);
-	lua_settop(L, -2);
-	int[] party = getIntArray(L, 1);
 	if (status == "requested") {
-		res.content = `{"name": "vs-link-ersatz", "version": "` ~ VERSION ~ `", "party": ` ~ party.to!string ~ `, "pc": ` ~ pc.to!string ~ `}`;
-		status = "responded";
+		if (req.path == "/sync") {
+			int[] pc = getIntArray(L, 2);
+			lua_settop(L, -2);
+			int[] party = getIntArray(L, 1);
+			res.content = `{"name": "vs-link-ersatz", "version": "` ~ VERSION ~ `", "party": ` ~ party.to!string ~ `, "pc": ` ~ pc.to!string ~ `}`;
+			status = "responded";
+		} else {
+			res.content = `{"name": "vs-link-ersatz", "version": "` ~ VERSION ~ `"}`;
+			status = "responded";
+		}
 	}
 	return 0;
 }
@@ -255,6 +281,7 @@ extern(C) export int luaopen_vslinkcore(lua_State L) {
 
 	addGlobal(L, "vs_pollServer", &vs_pollServer);
 	addGlobal(L, "vs_respond", &vs_respond);
+	addGlobal(L, "vs_error", &vs_error);
 	
 	return 0;
 }

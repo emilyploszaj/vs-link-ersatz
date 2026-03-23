@@ -30,7 +30,7 @@ Vs. Link Ersatz is hosted on port `31123`, and can be accessed from web browsers
 
 ## Endpoints
 
-These are the available endpoints as of version `0.1.0`.
+These are the available endpoints as of version `0.1.1`.
 More are planned.
 
 If a malformed request is received by Vs. Link Ersatz, it will return a JSON object with a description of the error.
@@ -49,13 +49,13 @@ Returns a JSON object describing the status of Vs. Link Ersatz
 | Field | Description |
 | --- | --- |
 | `name` | Always `vs-link-ersatz` |
-| `version` | The running version, currently `0.1.0` |
+| `version` | The running version, currently `0.1.1` |
 
-### Example
+### Example Response
 ```json
 {
 	"name": "vs-link-ersatz",
-	"version": "0.1.0"
+	"version": "0.1.1"
 }
 ```
 
@@ -63,19 +63,51 @@ Returns a JSON object describing the status of Vs. Link Ersatz
 Returns a JSON object with the raw memory blocks containing the player's pokemon data.
 See other resources on the generation 4 save format to parse these bytes.
 
+### Response
 | Field | Description |
 | --- | --- |
 | `party` | A byte array of length `1416` (`236 * 6`) representing the player's party |
 | `pc` | A byte array of length `73440` (`136 * 18 * 30`) representing the player's PC boxes, in order |
 | `name` | Always `vs-link-ersatz` |
-| `version` | The running version, currently `0.1.0` |
+| `version` | The running version, currently `0.1.1` |
 
-### Example
+### Example Response
 ```json
 {
 	"party": [12, 13, ...  0, 245],
 	"pc": [99, 18, ...  124, 17],
 	"name": "vs-link-ersatz",
-	"version": "0.1.0"
+	"version": "0.1.1"
 }
 ```
+
+## `POST` `/status`
+Inflicts status effects on certain party members. While the request is restricted to statuses the player could reasonably obtain, there's no thorough way to determine based on the current game state what statuses are valid. For instance, in a gauntlet without encounters, it would not be reasonable to become poisoned between battles, but Vs. Link Ersatz would be able to inflict this status. In contrast, a player is never able to inflict a certain number of sleep turns outside of 0 in normal gameplay while knowing they've done so, which is why Vs. Link Ersatz does not enable this functionality.
+
+### Request
+| Field | Description |
+| --- | --- |
+| `statuses` | An array of JSON objects |
+| `statuses[n].index` | An integer for which party member should be statused. From `0` to `5` |
+| `statuses[n].status` | What status to inflict to this party member. One of `"slp"`, `"psn"`, `"brn"`, `"frz"`, `"prz"`, or `"tox"`. Any other value will clear the status. `"slp"` will always afflict 0 turn sleep. |
+
+### Example Request
+
+The following request would afflict the first member of the party with poisoning and the 5th member of the party with sleep.
+```json
+{
+	"statuses": [
+		{
+			"index": 0,
+			"status": "psn"
+		},
+		{
+			"index": 4,
+			"status": "slp"
+		}
+	]
+}
+```
+
+### Response
+See `GET` `/ping`.
