@@ -12,7 +12,7 @@ import std.json;
 import std.socket;
 import std.string;
 
-enum string VERSION = "0.1.1";
+enum string VERSION = "0.1.2";
 
 __gshared status = "idle";
 __gshared Http req;

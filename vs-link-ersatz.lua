@@ -179,6 +179,8 @@ local function fromJson(data)
 end
 
 -- End of Malachite library code
+local actionQueueType = nil
+local actionQueue = {}
 
 print("Loading Vs. Link Ersatz...")
 local lib = require("vslinkcore")
@@ -214,7 +216,7 @@ local function bAnd(a, b)
 end
 
 -- Assumes 136 byte range
-function decryptMon(range, seed, offset, length)
+local function decryptMon(range, seed, offset, length)
 	local ret = {}
 	local prng = seed;
 	-- Did you know Lua will coerce all literals to be at max 0xffffffff?
@@ -235,14 +237,28 @@ function decryptMon(range, seed, offset, length)
 	return ret
 end
 
-function statusPartyMember(member, status)
+local function checksumMon(range, offset)
+	local sum = 0
+	for i = 0, 127, 2 do
+		local index = i + offset
+		sum = (sum + (range[index] + range[index + 1] * 0x100)) % 0x10000
+	end
+	return sum
+end
+
+local function statusPartyMember(member, status)
 	local party = memory.readdword(0x02101D2C) + 0xD094
 	local partyData = memory.readbyterange(party + 236 * member, 236)
+	local checksum = partyData[7] + partyData[8] * 0x100
 	local personality = partyData[1] + (partyData[2] * 0x100) + (partyData[3] * 0x10000) + (partyData[4] * 0x1000000)
 	local battleData = decryptMon(partyData, personality, 128 + 8, 100)
 	-- This is currently not needed
-	-- local decrypted = decryptMon(partyData, partyData[7] + partyData[8] * 0x100, 8, 128)
+	local decrypted = decryptMon(partyData, checksum, 8, 128)
 	-- local shuffle = (bAnd(personality, 0x3E000) / 8192) % 24
+
+	if checksum ~= checksumMon(decrypted, 0) then
+		return false
+	end
 
 	-- This write and encryption don't technically need the whole routine, but it's quick
 	if status == "slp" then
@@ -262,11 +278,38 @@ function statusPartyMember(member, status)
 	end
 	local encryptedBattleData = decryptMon(battleData, personality, -1, 100)
 	memory.writebyte(party + 236 * member + 128 + 8, encryptedBattleData[0])
+	return true
 end
 
 local currentFrame = 0
 local function frame()
     currentFrame = currentFrame + 1
+	if actionQueueType ~= nil then
+		for i = #actionQueue, 1, -1 do
+			local q = actionQueue[i]
+			local result = false
+			if actionQueueType == "status" then
+				result = statusPartyMember(q.member, q.status)
+			end
+			if result == true then
+				print("Resolved action queue with " .. q.attempts .. " attempts left!")
+				table.remove(actionQueue, i)
+			else
+				q.attempts = q.attempts - 1
+				if q.attempts <= 0 then
+					actionQueueType = nil
+					actionQueue = {}
+					vs_error()
+					break
+				end
+			end
+		end
+		if #actionQueue == 0 then
+			actionQueueType = nil
+			vs_respond()
+		end
+		return
+	end
     if currentFrame % 3 == 0 then
         local status = vs_pollServer()
         if status.status == "requested" then
@@ -288,11 +331,18 @@ local function frame()
 						for i = #json.statuses, 1, -1 do
 							local member = math.floor(json.statuses[i].index)
 							if member >= 0 and member < 6 then
-								statusPartyMember(member, json.statuses[i].status)
-								vs_respond()
-								return
+								local result = statusPartyMember(member, json.statuses[i].status)
+								if result ~= true then
+									print("queueing...")
+									actionQueueType = "status"
+									table.insert(actionQueue, { attempts = 20, member = member, status = json.statuses[i].status })
+								end
 							end
 						end
+						if actionQueueType == nil then
+							vs_respond()
+						end
+						return
 					end
 					vs_error("Malformed status request")
 				end

@@ -30,7 +30,7 @@ Vs. Link Ersatz is hosted on port `31123`, and can be accessed from web browsers
 
 ## Endpoints
 
-These are the available endpoints as of version `0.1.1`.
+These are the available endpoints as of version `0.1.2`.
 More are planned.
 
 If a malformed request is received by Vs. Link Ersatz, it will return a JSON object with a description of the error.
@@ -49,13 +49,13 @@ Returns a JSON object describing the status of Vs. Link Ersatz
 | Field | Description |
 | --- | --- |
 | `name` | Always `vs-link-ersatz` |
-| `version` | The running version, currently `0.1.1` |
+| `version` | The running version, currently `0.1.2` |
 
 ### Example Response
 ```json
 {
 	"name": "vs-link-ersatz",
-	"version": "0.1.1"
+	"version": "0.1.2"
 }
 ```
 
@@ -69,7 +69,7 @@ See other resources on the generation 4 save format to parse these bytes.
 | `party` | A byte array of length `1416` (`236 * 6`) representing the player's party |
 | `pc` | A byte array of length `73440` (`136 * 18 * 30`) representing the player's PC boxes, in order |
 | `name` | Always `vs-link-ersatz` |
-| `version` | The running version, currently `0.1.1` |
+| `version` | The running version, currently `0.1.2` |
 
 ### Example Response
 ```json
@@ -77,7 +77,7 @@ See other resources on the generation 4 save format to parse these bytes.
 	"party": [12, 13, ...  0, 245],
 	"pc": [99, 18, ...  124, 17],
 	"name": "vs-link-ersatz",
-	"version": "0.1.1"
+	"version": "0.1.2"
 }
 ```
 
