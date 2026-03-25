@@ -12,7 +12,7 @@ import std.json;
 import std.socket;
 import std.string;
 
-enum string VERSION = "0.1.2";
+enum string VERSION = "0.2.0";
 
 __gshared status = "idle";
 __gshared Http req;
@@ -43,14 +43,8 @@ void httpRun() {
 					if (http.valid) {
 						if (http.method == "GET" && http.path == "/ping") {
 							client.sendResponse(`{"name": "vs-link-ersatz", "version": "` ~ VERSION ~ `"}`);
-							break;
-						} else if (http.method == "POST" && http.path == "/status") {
-							sendToLua(client, http);
-						} else if (http.method == "GET" && http.path == "/sync") {
-							sendToLua(client, http);
-							break;
 						} else {
-							client.sendResponse(`{"error": "Unknown Vs. Link Ersatz command"}`);
+							sendToLua(client, http);
 						}
 					}
 				} else {
@@ -87,6 +81,7 @@ void sendResponse(Socket client, string message) {
 	string response = 
 		"HTTP/1.0 200 OK\r\n" ~
 		"Access-Control-Allow-Origin: *\r\n" ~
+		"Access-Control-Allow-Methods: *\r\n" ~
 		"Content-Type: text/plain\r\n" ~
 		"Content-Length: " ~ message.length.to!string ~ "\r\n" ~
 		"\r\n" ~ message;

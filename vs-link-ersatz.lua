@@ -179,8 +179,12 @@ local function fromJson(data)
 end
 
 -- End of Malachite library code
+local MINUTES_ADDR = 0x021BF5E8 + 4
+local HOURS_ADDR = 0x021BF5E8
+
 local actionQueueType = nil
 local actionQueue = {}
+local pinnedTime = nil
 
 print("Loading Vs. Link Ersatz...")
 local lib = require("vslinkcore")
@@ -281,6 +285,13 @@ local function statusPartyMember(member, status)
 	return true
 end
 
+local function endTime()
+	if pinnedTime == nil then
+		return
+	end
+	memory.writebyte(HOURS_ADDR, pinnedTime.hour)
+end
+
 local currentFrame = 0
 local function frame()
     currentFrame = currentFrame + 1
@@ -292,7 +303,6 @@ local function frame()
 				result = statusPartyMember(q.member, q.status)
 			end
 			if result == true then
-				print("Resolved action queue with " .. q.attempts .. " attempts left!")
 				table.remove(actionQueue, i)
 			else
 				q.attempts = q.attempts - 1
@@ -313,15 +323,16 @@ local function frame()
     if currentFrame % 3 == 0 then
         local status = vs_pollServer()
         if status.status == "requested" then
-			if status.method == "GET" then
-				if status.path == "/sync" then
-					local party = memory.readdword(0x02101D2C) + 0xD094
-					local pc = memory.readdword(0x021C0794) + 0xCF44
-					local partyData = memory.readbyterange(party, 236 * 6)
-					local pcData = memory.readbyterange(pc, 136 * 540)
-					vs_respond(partyData, pcData)
-				end
-			elseif status.method == "POST" then
+			if status.method == "GET" and status.path == "/sync" then
+				local party = memory.readdword(0x02101D2C) + 0xD094
+				local pc = memory.readdword(0x021C0794) + 0xCF44
+				local partyData = memory.readbyterange(party, 236 * 6)
+				local pcData = memory.readbyterange(pc, 136 * 540)
+				vs_respond(partyData, pcData)
+			elseif status.method == "DELETE" and status.path == "/time" then
+				pinnedTime = nil
+				vs_respond()
+			elseif status.method == "PUT" or status.method == "POST" then
             	local json, err = fromJson(status.request)
 				if json == nil or err ~= nil then
 					print("Error parsing JSON: " .. err)
@@ -333,7 +344,6 @@ local function frame()
 							if member >= 0 and member < 6 then
 								local result = statusPartyMember(member, json.statuses[i].status)
 								if result ~= true then
-									print("queueing...")
 									actionQueueType = "status"
 									table.insert(actionQueue, { attempts = 20, member = member, status = json.statuses[i].status })
 								end
@@ -345,11 +355,27 @@ local function frame()
 						return
 					end
 					vs_error("Malformed status request")
+				elseif status.path == "/time" then
+					if json.time ~= nil and json.time.hour ~= nil then
+						if json.time.hour >= 0 and json.time.hour < 24 then
+							pinnedTime = { hour = math.floor(json.time.hour) }
+							vs_respond()
+						else
+							vs_error("Illegal time value provided")
+						end
+					else
+						vs_error("Malformed time request")
+					end
+				else
+					vs_error("Unknown command")
 				end
+			else 
+				vs_error("Unknown command")
 			end
         end
     end
 end
 
 gui.register(frame)
+memory.registerread(MINUTES_ADDR, 1, endTime)
 print("Successfully loaded Vs. Link Ersatz, by Emi")
